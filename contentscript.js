@@ -95,7 +95,6 @@ function parseChampionData(championData, playerData) {
 // Gets kills from timeline data
 function parseTimelineData(timelineData, playerData) {
     var kills = [];
-
     timelineData.frames.forEach(function(frame){
         frame.events.forEach(function(event) {
             if (event.type == "CHAMPION_KILL") {
@@ -112,10 +111,89 @@ function parseTimelineData(timelineData, playerData) {
                     killPosition: [event.position.x, event.position.y]
                 });
             }
+            // Inhib and Turret kills need to show the proper team color
+            // Killer id of 0 indicates that minions killed the turret
+            else if (event.type == "BUILDING_KILL" && event.buildingType != "INHIBITOR_BUILDING") {
+                kills.push({
+                    killerId : event.killerId,
+                    killerTeam:  event.teamId == 200 ? "blue" : "red",
+                    killerChampion: event.killerId < 1 ? "Minions" : playerData[event.killerId].championName,
+                    killerSummonerName: event.killerId < 1 ? "" : playerData[event.killerId].summonerName,
+                    victimId: event.buildingType,
+                    victimTeam:  event.teamId == 200 ? "red" : "blue",
+                    victimChampion: formatLane(event.laneType) + " " + formatUnderscoreString(event.towerType),
+                    victimSummonerName: event.towerType,
+                    killTime: event.timestamp,
+                    killPosition: [event.position.x, event.position.y]
+                });
+            }
+            else if (event.type == "BUILDING_KILL" && event.buildingType == "INHIBITOR_BUILDING") {
+                kills.push({
+                    killerId : event.killerId,
+                    killerTeam:  event.teamId == 200 ? "blue" : "red",
+                    killerChampion: event.killerId < 1 ? "Execution" : playerData[event.killerId].championName,
+                    killerSummonerName: event.killerId < 1 ? "" : playerData[event.killerId].summonerName,
+                    victimId: event.laneType + " Inhibitor",
+                    victimTeam:  event.teamId == 200 ? "red" : "blue",
+                    victimChampion: formatLane(event.laneType) + " " + formatInhibitorString(event.buildingType),
+                    victimSummonerName: event.laneType + " Inhibitor",
+                    killTime: event.timestamp,
+                    killPosition: [event.position.x, event.position.y]
+                });
+            }
+            else if (event.type == "ELITE_MONSTER_KILL") {
+                kills.push({
+                    killerId : event.killerId,
+                    killerTeam:  event.killerId < 1 ? "neutral" : playerData[event.killerId].team,
+                    killerChampion: event.killerId < 1 ? "Execution" : playerData[event.killerId].championName,
+                    killerSummonerName: event.killerId < 1 ? "" : playerData[event.killerId].summonerName,
+                    victimId: event.monsterType,
+                    victimTeam: "purple",
+                    victimChampion: formatMonster(event.monsterType),
+                    victimSummonerName: event.monsterType,
+                    killTime: event.timestamp,
+                    killPosition: [event.position.x, event.position.y]
+                });
+            }
         });
     });
 
     return kills;
+}
+
+function formatMonster(str) {
+    if (str == "RIFTHERALD") {
+        let hIndex = str.indexOf("H");
+        let firstWord = str[0] + str.substring(1, hIndex).toLowerCase();
+        let secondWord = str[hIndex] + str.substring(hIndex + 1).toLowerCase();
+        return firstWord + " " + secondWord;
+    }
+    else if (str == "DRAGON") {
+        return str[0] +  str.substring(1).toLowerCase();
+    }
+    else if (str == "BARON_NASHOR") {
+        return formatUnderscoreString(str);
+    }
+    
+}
+
+function formatInhibitorString(str) {
+    let underscoreIndex = str.indexOf("_");
+    let inhibitorStr = str[0] + str.substring(1, underscoreIndex).toLowerCase();
+    return inhibitorStr;
+}
+
+function formatUnderscoreString(str) {
+    let underscoreIndex = str.indexOf("_");
+    let firstWord = str[0] + str.substring(1, underscoreIndex).toLowerCase();
+    let secondWord = str[underscoreIndex + 1] + str.substring(underscoreIndex + 2).toLowerCase();
+    return firstWord + " " + secondWord;
+}
+
+function formatLane(laneStr) {
+    let underscoreIndex = laneStr.indexOf("_");
+    let laneLocation = laneStr.substring(0, underscoreIndex);
+    return laneLocation[0] + laneLocation.substring(1).toLowerCase();
 }
 
 // takes a parameter of milliseconds and returns a minute:seconds formatted string, like MM:SS
@@ -237,7 +315,7 @@ function addKillstatsHTML(playerKillData) {
     var contentTableHeaders = document.createElement("tr");
 
     //table style and html
-    var tableStyle = "<style type='text/css'>.red {color:#F23C1D;} .blue {color:#0C82F0;} .neutral {color:#848786;}  .tg {border-collapse:collapse;border-spacing:0;}.tg td{text-align:center;font-size:1.1em;padding:10px 5px;overflow:hidden;word-break:normal;width: 333px; margin: auto;}.tg th{font-family:Arial, sans-serif;font-size:1.2ems;font-weight:bold;padding:10px 5px;overflow:hidden;word-break:normal;text-align:center;}.tg .tg-header{vertical-align:top;}</style>";
+    var tableStyle = "<style type='text/css'>.red {color:#F23C1D;} .blue {color:#0C82F0;} .neutral {color:#848786;}  .tg {border-collapse:collapse;border-spacing:0;}.tg td{padding-left: 90px;text-align:left;font-size:1.1em;padding-top:10px; padding-bottom:10px; padding-right:5px;overflow:hidden;word-break:normal;width: 333px; margin: auto;}.tg th{font-family:Arial, sans-serif;font-size:1.2ems;font-weight:bold;padding:10px 5px;overflow:hidden;word-break:normal;}.tg .tg-header{text-align:left; padding-left: 90px;vertical-align:top;}</style>";
     var tableHtml = "<table class='tg'><tr><th class='tg-header'>Time</th><th class='tg-header'>Killer</th><th class='tg-header'>Victim</th>" + generateTable(playerKillData) + "</tr></table>";
     var aboutLink = "<div class = 'aboutContainer' style = 'width:100%; margin: auto;'><div class = 'aboutLink' style = 'text-align: center;color: black; margin: auto;font-size: 0.8em;'>Chrome Extension by <a href='mailto:leaguestatsextension@gmail.com'>Andrew Pitts</a></div></div>"
     //adds style and html to table elements
@@ -250,7 +328,7 @@ function addKillstatsHTML(playerKillData) {
 // Creates the killstat table HTML
 function generateTable(playerKillData) {
     var tableRows = "";
-    var enemyColor = {red: "#F23C1D", blue: "#0C82F0", neutral: "#848786"};
+    var enemyColor = {red: "#F23C1D", blue: "#0C82F0", neutral: "#848786", purple: "#A814DE"};
     for (var kill in playerKillData) {
         tableRows += "<tr class = '" + playerKillData[kill].killerTeam + "'><td>" + convertTime(playerKillData[kill].killTime)
                      + "</td><td class='tg'>" + playerKillData[kill].killerChampion + "</td><td class='tg-enemy' style='color:" + enemyColor[playerKillData[kill].victimTeam] + ";'>" + playerKillData[kill].victimChampion
